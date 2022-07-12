@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>商品详情</title>
+    <!-- jquery -->
+    <script type="text/javascript" src="/js/jquery.min.js"></script>
+    <!-- bootstrap -->
+    <link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap.min.css"/>
+    <script type="text/javascript" src="/bootstrap/js/bootstrap.min.js"></script>
+    <!-- layer -->
+    <script type="text/javascript" src="/layer/layer.js"></script>
+    <!-- common.js -->
+    <script type="text/javascript" src="/js/common.js"></script>
+</head>
+<body>
+<div class="panel panel-default">
+    <div class="panel-heading">秒杀商品详情</div>
+    <div class="panel-body">
+        <span id="userTip"> 您还没有登录，请登陆后再操作<br/></span>
+        <span>没有收货地址的提示。。。</span>
+    </div>
+    <table class="table" id="goods">
+        <tr>
+            <td>商品名称</td>
+            <td colspan="3" id="goodsName"></td>
+        </tr>
+        <tr>
+            <td>商品图片</td>
+            <td colspan="3"><img id="goodsImg" width="200" height="200"/></td>
+        </tr>
+        <tr>
+            <td>秒杀开始时间</td>
+            <td id="startTime"></td>
+            <td>
+                <input type="hidden" id="remainSeconds">
+                <!--                <span th:if="${secKillStatus eq 0}">秒杀倒计时: <span id="countDown" th:text="${remainSeconds}"></span>秒-->
+                <!--                </span>-->
+                <!--                <span th:if="${secKillStatus eq 1}">秒杀进行中</span>-->
+                <!--                <span th:if="${secKillStatus eq 2}">秒杀已结束</span>-->
+<!--                这个标签描述状态：秒杀倒计时，秒杀进行中，秒杀已结束-->
+                <span id="seckillTip"></span>
+            </td>
+            <td>
+<!--                优化1-->
+<!--                                <form id="secKillForm" method="post" action="/seckill/doSeckill">-->
+<!--                                    <input type="hidden" name="goodsId" id="goodsId">-->
+<!--                                    <button class="btn btn-primary btn-block" type="submit" id="buyButton">立即秒杀</button>-->
+<!--                                </form>-->
+
+<!--                优化2  -->
+<!--                现在使用ajax发起请求-->
+<!--                <button class="btn btn-primary btn-block" type="submit" id="buyButton" onclick="getSeckillPath()">立即秒杀-->
+<!--&lt;!&ndash;                    这里的goodsId的值，会被渲染，在render函数中&ndash;&gt;-->
+<!--&lt;!&ndash;                    我有个疑问，goodsList页面跳转到goodsDetail页面，同时url会携带goodsId，而本页面会解析出goodsId的值，然后使用ajax同时携带goodsId去请求后端&ndash;&gt;-->
+<!--&lt;!&ndash;                    ，后端传过来一个对象，包括了goodsId，然后对这个标签进行渲染，那么为什么不能一开始使用（goodsList页面跳转到goodsDetail页面，同时url会携带的goodsId）对这个标签进行渲染呢？&ndash;&gt;-->
+<!--                    <input type="hidden" name="goodsId" id="goodsId">-->
+<!--                </button>-->
+
+                <!--                优化3  使用验证码 -->
+                <div class="row">
+                    <div class="form-inline">
+                        <img id="captchaImg" width="130" height="32" onclick="refreshCaptcha()" style="display: none">
+<!--                        填写验证码的输入框-->
+                        <input id="captcha" class="form-control" style="display: none">
+                        <button class="btn btn-primary" type="submit" id="buyButton"
+                                onclick="getSeckillPath()">立即秒杀
+<!--                            提交表单也会提交goodsId-->
+                            <input type="hidden" name="goodsId" id="goodsId">
+                        </button>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td>商品原价</td>
+            <td colspan="3" id="goodsPrice"></td>
+        </tr>
+        <tr>
+            <td>秒杀价</td>
+            <td colspan="3" id="seckillPrice"></td>
+        </tr>
+        <tr>
+            <td>库存数量</td>
+            <td colspan="3" id="stockCount"></td>
+        </tr>
+    </table>
+</div>
+</body>
+<script>
+    $(function () {
+        // countDown();
+        getDetails();
+    });
+
+    //点击验证码，生成新的验证码（验证码由后端传过来）
+    function refreshCaptcha() {  //刷新验证码
+        $("#captchaImg").attr("src", "/seckill/captcha?goodsId=" + $("#goodsId").val() + "&time=" + new Date());
+    }
+
+    //获取秒杀地址
+    function getSeckillPath() {
+        var goodsId = $("#goodsId").val();
+        var captcha = $("#captcha").val();  //拿到验证码
+        g_showLoading();
+        $.ajax({
+            url: "/seckill/path",
+            type: "GET",
+            data: {
+                goodsId: goodsId,
+                captcha: captcha  //将验证码通过ajax传给后端
+            },
+            success: function (data) {
+                if (data.code == 200) {   //data是后端传过来的对象，code，obj等都是该对象的属性
+                    var path = data.obj;
+                    doSecKill(path);
+                } else {
+                    layer.msg(data.message);
+                }
+            },
+            error: function () {
+                layer.msg("客户端请求错误");
+            }
+        });
+    }
+
+
+    // 秒杀方法  秒杀成功之后跳到订单详情页面
+    //到指定的秒杀地址，进行秒杀
+    function doSecKill(path) {
+        $.ajax({
+            url: '/seckill/'+path+'/doSecKill',
+            type: "POST",       //post请求
+            data: {
+                goodsId: $('#goodsId').val(),   //将数据goodsId传给后端
+                // path:path  使用这种方法后端直接作为参数，或者后端使用pathVariable注解获取path
+            },
+            success: function (data) {
+                if (data.code == 200) {
+                    // 后端由于使用rabbitmq进行异步下单，所以返回的结果是0，不是正常下单成功，因此这里前端得到0，还需要进一步判断是否真正秒杀成功（即数据库中存在订单）
+                    // window.location.href="/orderDetail.htm?orderId="+data.obj.id;
+                    getResult($("#goodsId").val());  //查询结果
+                } else {
+                    layer.msg(data.message);
+                }
+            }, error: function () {
+                layer.msg("客户端请求出错");
+            }
+
+        });
+    }
+
+    function getResult(goodsId) {
+        g_showLoading();  //加载动画
+        $.ajax({
+            url: "/seckill/result",
+            type: "GET",
+            data: {
+                goodsId: goodsId
+            },
+            success: function (data) {
+                if (data.code == 200) {
+                    var result = data.obj;   //obj是后端RespBean的属性
+                    if (result < 0) {
+                        layer.msg("对不起，秒杀失败");
+                    } else if (result == 0) {
+                        setTimeout(function () {   //轮询查看结果
+                            getResult(goodsId)
+                        });
+                    } else {
+                        layer.confirm("恭喜您，秒杀成功！查看订单？", {btn: ["确定", "取消"]},
+                            function () {
+                                window.location.href = "/orderDetail.htm?orderId=" + result;
+                            },
+                            function () {
+                                layer.close();
+                            }
+                        )
+                    }
+                }
+            },
+            error: function () {
+                layer.msg("客户端请求错误");
+            }
+        });
+    }
+
+    function getDetails() {
+        var goodsId = g_getQueryString("goodsId");   //这里的goodsId是由对url参数进行提取（正则表达式）得到的
+        console.log(goodsId);
+        $.ajax({   //ajax请求后端数据
+            url: '/goods/toDetail/' + goodsId,
+            type: 'GET',
+            success: function (data) {
+                if (data.code == 200) {
+                    render(data.obj);
+                    countDown();
+                } else {
+                    layer.msg("客户端请求出错");
+                }
+            },
+            error: function () {
+                layer.msg("客户端请求出错");
+            }
+        })
+    }
+
+    function render(detail) {  //自定义函数处理后端传过来的对象数据，渲染页面
+        var user = detail.user;
+        var goodsVo = detail.goodsVo;
+        var remainSeconds = detail.remainSeconds;
+        if (user) {
+            $("#userTip").hide();   //隐藏id为userTip的标签
+        }
+        $("#goodsName").text(goodsVo.goodsName);
+        $("#goodsImg").attr("src", goodsVo.goodsImg);
+        $("#startTime").text(new Date(goodsVo.startDate).format("yyyy-MM-dd HH:mm:ss"));
+        $("#remainSeconds").val(remainSeconds);
+        $("#goodsId").val(goodsVo.id);       //
+        $("#goodsPrice").text(goodsVo.goodsPrice);
+        $("#seckillPrice").text(goodsVo.seckillPrice);
+        $("#stockCount").text(goodsVo.stockCount);
+        countDown();
+    }
+
+    function countDown() {
+        var remainSeconds = $("#remainSeconds").val();
+        var timeout;
+        //秒杀还未开始
+        if (remainSeconds > 0) {
+            $("#buyButton").attr("disabled", true);
+            $("#seckillTip").html("秒杀倒计时：" + remainSeconds + "秒");
+            timeout = setTimeout(function () {
+                // $("#countDown").text(remainSeconds - 1);
+                $("#remainSeconds").val(remainSeconds - 1);
+                countDown();
+            }, 1000);
+            // 秒杀进行中
+        } else if (remainSeconds == 0) {
+            $("#buyButton").attr("disabled", false);
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+            $("#seckillTip").html("秒杀进行中")
+            refreshCaptcha();  //秒杀进行中，展示验证码
+            $("#captchaImg").show();
+            $("#captcha").show();
+        } else {
+            $("#buyButton").attr("disabled", true);
+            $("#seckillTip").html("秒杀已经结束");
+            $("#captchaImg").hide();
+            $("#captcha").hide();
+        }
+    };
+
+</script>
+</html>
